@@ -1,0 +1,53 @@
+#!/usr/bin/python 
+# vim:set et sts=4 sw=4:
+# -*- coding: utf-8 -*-
+#
+# file-roller-sjis - Open Shift-JIS ZIP files with file-roller
+#
+# Copyright (c) 2016 Takao Fujiwara <takao.fujiwara1@gmail.com>
+# Copyright (c) 2016 Red Hat, Inc.
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+
+from __future__ import print_function
+
+import gtk
+import locale
+import os
+import sys
+
+VERSION='0.1'
+ZIP_LOCALE='ja_JP.SJIS'
+
+try:
+    locale.setlocale(locale.LC_ALL, ZIP_LOCALE)
+except locale.Error as e:
+    error_message = "%s is not installed" % ZIP_LOCALE
+    dlg = gtk.MessageDialog(type = gtk.MESSAGE_ERROR,
+                            buttons = gtk.BUTTONS_CLOSE,
+                            message_format = error_message)
+    dlg.run()
+    dlg.destroy()
+    print(error_message, file=sys.stderr)
+
+args = ['file-roller'] +  sys.argv[1:]
+env = os.environ.copy()
+env['LANG'] = ZIP_LOCALE
+try:
+    del env['G_BROKEN_FILENAMES']
+    del env['G_FILENAME_ENCODING']
+except KeyError:
+    pass
+os.spawnve(os.P_WAIT, '/usr/bin/file-roller', args, env)
