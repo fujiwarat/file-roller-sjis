@@ -26,28 +26,100 @@ from __future__ import print_function
 import gtk
 import locale
 import os
+import platform
+import shutil
 import sys
 
-VERSION='0.1'
+VERSION='0.2'
 ZIP_LOCALE='ja_JP.SJIS'
 
-try:
-    locale.setlocale(locale.LC_ALL, ZIP_LOCALE)
-except locale.Error as e:
-    error_message = "%s is not installed" % ZIP_LOCALE
+def has_iconv_zip():
+    p = os.popen('unzip -h', 'r')
+    for line in p.readlines():
+        if line.lstrip().startswith('-O CHARSET'):
+            p.close()
+            return True
+    p.close()
+    return False
+
+def has_p7zip():
+    for dir in os.environ['PATH'].split(':'):
+        path = dir + '/7za'
+        if os.path.exists(path):
+            return True
+    return False
+
+if len(sys.argv) == 1:
+    error_message = "usage: %s ZIP_FILE" % sys.argv[0]
     dlg = gtk.MessageDialog(type = gtk.MESSAGE_ERROR,
                             buttons = gtk.BUTTONS_CLOSE,
                             message_format = error_message)
     dlg.run()
     dlg.destroy()
     print(error_message, file=sys.stderr)
+    sys.exit(-1)
 
-args = ['file-roller'] +  sys.argv[1:]
+
+dist = platform.linux_distribution()[0]
+# Red Hat has an internal patch for ZIP
+# https://bugzilla.redhat.com/show_bug.cgi?id=885540
+if dist.startswith('Red Hat') or dist.startswith('Fedora'):
+    if not has_iconv_zip():
+        error_message = "Need unzip-6.0-4 or later"
+        dlg = gtk.MessageDialog(type = gtk.MESSAGE_ERROR,
+                                buttons = gtk.BUTTONS_CLOSE,
+                                message_format = error_message)
+        dlg.run()
+        dlg.destroy()
+        print(error_message, file=sys.stderr)
+        sys.exit(-1)
+# Otherwise 7ZIP is i18ned.
+else:
+    if not has_p7zip():
+        error_message = "Need P7ZIP"
+        dlg = gtk.MessageDialog(type = gtk.MESSAGE_ERROR,
+                                buttons = gtk.BUTTONS_CLOSE,
+                                message_format = error_message)
+        dlg.run()
+        dlg.destroy()
+        print(error_message, file=sys.stderr)
+        sys.exit(-1)
+
+p = os.popen('mktemp -d', 'r')
+tempdir = p.readline().rstrip()
+p.close()
+print(tempdir)
+
+args = ['unzip', '-d', tempdir] + sys.argv[1:]
 env = os.environ.copy()
 env['LANG'] = ZIP_LOCALE
-try:
-    del env['G_BROKEN_FILENAMES']
-    del env['G_FILENAME_ENCODING']
-except KeyError:
-    pass
-os.spawnve(os.P_WAIT, '/usr/bin/file-roller', args, env)
+os.spawnvpe(os.P_WAIT, 'unzip', args, env)
+
+# walk() is stopped if rename() is called during walk()
+rename_list = []
+for root, dirs, files in os.walk(tempdir):
+    uroot = unicode(root, 'cp932').encode('utf-8')
+    for d in dirs:
+        udir = unicode(d, 'cp932').encode('utf-8')
+        rename_list.append([uroot + '/' + d, uroot + '/' + udir])
+    for f in files:
+        ufile = unicode(f, 'cp932').encode('utf-8')
+        rename_list.append([uroot + '/' + f, uroot + '/' + ufile])
+for src, dist in rename_list:
+    os.rename(src, dist)
+
+p = os.popen('mktemp -u --suffix=.zip', 'r')
+tempzip = p.readline().rstrip()
+p.close()
+print(tempzip)
+
+cwd = os.getcwd()
+os.chdir(tempdir)
+args = ['zip', '-D', '-r', tempzip] + os.listdir(tempdir)
+os.spawnvp(os.P_WAIT, 'zip', args)
+os.chdir(cwd)
+shutil.rmtree(tempdir)
+
+args = ['file-roller', tempzip]
+os.spawnvp(os.P_WAIT, 'file-roller', args)
+os.unlink(tempzip)
