@@ -1,0 +1,32 @@
+This is a script to show the Shift-JIS encoded filenames and file contents
+archived in a ZIP file whose filename is UTF-8 using firefox in RHEL6.
+
+
+Environment
+============
+Environemnt RHEL 6
+Create ja_JP.SJIS locale
+Install P7ZIP from EPEL 6
+Apply a Shift-JIS patch to file-roller
+Rf: https://bugzilla.redhat.com/show_bug.cgi?id=1177950
+
+Installation
+============
+1. Install file-roller-sjis in /usr/bin with 755 permission
+2. Assume /usr/bin/file-roller
+3. Launch Firefox and click a link which indicates the ZIP file
+4. Firefox shows an open dialog and change firefox to file-roller-sjis,
+   check "Do this automatically for files like this from now on.",
+   and click OK.
+
+Then file-roller-sjis will runs:
+export -n G_BROKEN_FILENAMES=
+export -n G_FILE_ENCODING=
+env LANG=ja_JP.SJIS firefox foo.zip
+
+The saved profile will be $HOME/.mozilla/firefox/$PROFILE/mimeTypes.rdf
+If you copy your mimeTypes.rdf to other profile directories, 
+you can apply the same behavior to other people.
+But probably $PROFILE will be decided after firefox is launched.
+
+This way can work for other archive types besides ZIP.
