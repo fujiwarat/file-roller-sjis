@@ -28,10 +28,11 @@ import locale
 import os
 import platform
 import shutil
+import subprocess
 import sys
 
-VERSION='0.2'
-ZIP_LOCALE='ja_JP.SJIS'
+VERSION='0.3'
+
 
 def has_iconv_zip():
     p = os.popen('unzip -h', 'r')
@@ -42,6 +43,7 @@ def has_iconv_zip():
     p.close()
     return False
 
+
 def has_p7zip():
     for dir in os.environ['PATH'].split(':'):
         path = dir + '/7za'
@@ -49,23 +51,60 @@ def has_p7zip():
             return True
     return False
 
-if len(sys.argv) == 1:
-    error_message = "usage: %s ZIP_FILE" % sys.argv[0]
-    dlg = gtk.MessageDialog(type = gtk.MESSAGE_ERROR,
-                            buttons = gtk.BUTTONS_CLOSE,
-                            message_format = error_message)
-    dlg.run()
-    dlg.destroy()
-    print(error_message, file=sys.stderr)
-    sys.exit(-1)
+
+def is_utf8_zip():
+    args = " ".join(sys.argv[1:])
+    p = os.popen('unzip -Z -1 -O utf-8 ' + args, 'r')
+    for line in p.readlines():
+        if unicode(line, 'utf-8').find('?') >= 0:
+            p.close()
+            return False
+    p.close()
+    return True
 
 
-dist = platform.linux_distribution()[0]
-# Red Hat has an internal patch for ZIP
-# https://bugzilla.redhat.com/show_bug.cgi?id=885540
-if dist.startswith('Red Hat') or dist.startswith('Fedora'):
-    if not has_iconv_zip():
-        error_message = "Need unzip-6.0-4 or later"
+def gen_utf8_zip():
+    p = os.popen('mktemp -d', 'r')
+    tempdir = p.readline().rstrip()
+    p.close()
+    print(tempdir)
+
+    args = ['unzip', '-d', tempdir, '-O', 'cp932'] + sys.argv[1:]
+    os.spawnvp(os.P_WAIT, 'unzip', args)
+
+    '''
+    # walk() is stopped if rename() is called during walk()
+    rename_list = []
+    for root, dirs, files in os.walk(tempdir):
+        uroot = unicode(root, 'cp932').encode('utf-8')
+        for d in dirs:
+            udir = unicode(d, 'cp932').encode('utf-8')
+            rename_list.append([uroot + '/' + d, uroot + '/' + udir])
+        for f in files:
+            ufile = unicode(f, 'cp932').encode('utf-8')
+            rename_list.append([uroot + '/' + f, uroot + '/' + ufile])
+    for src, dist in rename_list:
+        os.rename(src, dist)
+    '''
+
+    p = os.popen('mktemp -u --suffix=.zip', 'r')
+    tempzip = p.readline().rstrip()
+    p.close()
+    print(tempzip)
+
+    cwd = os.getcwd()
+    os.chdir(tempdir)
+    args = ['zip', '-D', '-r', tempzip] + os.listdir(tempdir)
+    os.spawnvp(os.P_WAIT, 'zip', args)
+    os.chdir(cwd)
+    shutil.rmtree(tempdir)
+
+    return tempzip
+
+
+def main():
+    if len(sys.argv) == 1:
+        error_message = "usage: %s ZIP_FILE" % sys.argv[0]
         dlg = gtk.MessageDialog(type = gtk.MESSAGE_ERROR,
                                 buttons = gtk.BUTTONS_CLOSE,
                                 message_format = error_message)
@@ -73,10 +112,24 @@ if dist.startswith('Red Hat') or dist.startswith('Fedora'):
         dlg.destroy()
         print(error_message, file=sys.stderr)
         sys.exit(-1)
-# Otherwise 7ZIP is i18ned.
-else:
-    if not has_p7zip():
-        error_message = "Need P7ZIP"
+
+
+    dist = platform.linux_distribution()[0]
+    # Red Hat has an internal patch for ZIP
+    # https://bugzilla.redhat.com/show_bug.cgi?id=885540
+    if dist.startswith('Red Hat') or dist.startswith('Fedora'):
+        if not has_iconv_zip():
+            error_message = "Need unzip-6.0-4 or later"
+            dlg = gtk.MessageDialog(type = gtk.MESSAGE_ERROR,
+                                    buttons = gtk.BUTTONS_CLOSE,
+                                    message_format = error_message)
+            dlg.run()
+            dlg.destroy()
+            print(error_message, file=sys.stderr)
+            sys.exit(-1)
+    # Otherwise 7ZIP is i18ned.
+    else:
+        error_message = "'zip -O' option is enabled with Red Hat Linux"
         dlg = gtk.MessageDialog(type = gtk.MESSAGE_ERROR,
                                 buttons = gtk.BUTTONS_CLOSE,
                                 message_format = error_message)
@@ -85,41 +138,14 @@ else:
         print(error_message, file=sys.stderr)
         sys.exit(-1)
 
-p = os.popen('mktemp -d', 'r')
-tempdir = p.readline().rstrip()
-p.close()
-print(tempdir)
+    if is_utf8_zip():
+        args = ['file-roller'] + sys.argv[1:]
+        os.spawnvp(os.P_WAIT, 'file-roller', args)
+    else:
+        tempzip = gen_utf8_zip()
+        args = ['file-roller', tempzip]
+        os.spawnvp(os.P_WAIT, 'file-roller', args)
+        os.unlink(tempzip)
 
-args = ['unzip', '-d', tempdir] + sys.argv[1:]
-env = os.environ.copy()
-env['LANG'] = ZIP_LOCALE
-os.spawnvpe(os.P_WAIT, 'unzip', args, env)
-
-# walk() is stopped if rename() is called during walk()
-rename_list = []
-for root, dirs, files in os.walk(tempdir):
-    uroot = unicode(root, 'cp932').encode('utf-8')
-    for d in dirs:
-        udir = unicode(d, 'cp932').encode('utf-8')
-        rename_list.append([uroot + '/' + d, uroot + '/' + udir])
-    for f in files:
-        ufile = unicode(f, 'cp932').encode('utf-8')
-        rename_list.append([uroot + '/' + f, uroot + '/' + ufile])
-for src, dist in rename_list:
-    os.rename(src, dist)
-
-p = os.popen('mktemp -u --suffix=.zip', 'r')
-tempzip = p.readline().rstrip()
-p.close()
-print(tempzip)
-
-cwd = os.getcwd()
-os.chdir(tempdir)
-args = ['zip', '-D', '-r', tempzip] + os.listdir(tempdir)
-os.spawnvp(os.P_WAIT, 'zip', args)
-os.chdir(cwd)
-shutil.rmtree(tempdir)
-
-args = ['file-roller', tempzip]
-os.spawnvp(os.P_WAIT, 'file-roller', args)
-os.unlink(tempzip)
+if __name__ == '__main__':
+    main()
