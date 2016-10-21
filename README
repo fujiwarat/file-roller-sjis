@@ -1,11 +1,16 @@
-This is a script to show the Shift-JIS encoded filenames and file contents
-archived in a ZIP file whose filename is UTF-8 using firefox in RHEL6.
+This is a wrapper script using file-roller to show the Shift-JIS encoded
+filenames and file contents archived in a ZIP file whose filename
+is UTF-8.
+The motivation is to show the Shift-JIS encoding correctly when users
+try to open ZIP files on web pages without manual operations.
 
 
 Environment
 ============
 Environemnt RHEL 6
-Install the latest ZIP in RHEL 6 which supports 'zip -O' option
+file-roller
+firefox
+latest unzip in RHEL 6 which supports 'unzip -O' option
 Rf: https://bugzilla.redhat.com/show_bug.cgi?id=1177950
 
 Installation
