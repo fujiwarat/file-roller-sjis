@@ -19,7 +19,7 @@ Installation
 2. Assume /usr/bin/file-roller
 3. Install gnome-file-roller-sjis.desktop /usr/share/applications
 4. Modify default application for ZIP file in
-   /usr/share/applications/defaults.list below:
+   /usr/share/applications/defaults.list below [1]:
 
 # diff /usr/share/applications/defaults.list.orig \
   /usr/share/applications/defaults.list
@@ -38,3 +38,11 @@ just call file-roller and if not:
 unzip -o sjis foo.zip
 zip temp.zip
 file-roller temp.zip
+
+
+[1] When you modify /usr/share/applications/defaults.list, your desktop
+will use file-roller-sjis by the system default but of course users can
+customize it with the firefox preference dialog.
+If you'd like to select file-roller-sjis or file-roller by users without
+changing the default, you don't have to update the defaults.list but
+users can select them with the firefox preference dialog.
